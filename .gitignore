@@ -3,8 +3,12 @@ __pycache__/
 *.pyc
 
 # Virtual environments
-venv/
 virtualenv/
+venv/
+.env
+__pycache__/
+*.dll
+
 
 # Environment variables
 .env
