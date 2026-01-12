@@ -19,3 +19,7 @@ models/
 
 # OS
 .DS_Store
+ingestion_pipeline_trial.py
+answer_generation.py
+history_aware_generation.py
+
