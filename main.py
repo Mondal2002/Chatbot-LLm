@@ -43,7 +43,8 @@ db = PineconeVectorStore(
 # LLM (Mistral)
 # -------------------------------
 llm = OllamaLLM(
-    model="mistral"
+    model="phi3",
+    temperature=0.2
 )
 
 # -------------------------------
