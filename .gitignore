@@ -1,25 +1,8 @@
-# Python
-__pycache__/
-*.pyc
-
-# Virtual environments
 virtualenv/
 venv/
 .env
 __pycache__/
 *.dll
-
-
-# Environment variables
-.env
-
-# Models / cache
-.cache/
-models/
-
-# OS
-.DS_Store
-ingestion_pipeline_trial.py
-answer_generation.py
-history_aware_generation.py
+*.so
+*.bin
 
