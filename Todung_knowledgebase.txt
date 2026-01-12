@@ -1,0 +1,110 @@
+Todung – AI Frontdesk Platform
+
+Overview:
+Todung is an intelligent AI Frontdesk designed to transform business customer experiences. It automatically answers calls, books appointments, engages customers, and automates repetitive tasks using human-like conversational AI.
+
+Core Value Proposition:
+An intelligent AI frontdesk that answers calls, assists customers, books appointments, and automates interactions without human intervention.
+
+Key Features:
+
+1. AI Call Handling
+The AI attends customer calls using natural, human-like conversation and provides instant, accurate responses.
+
+2. Effortless Scheduling
+The system automatically calls customers for reminders, confirmations, and important updates.
+
+3. Secure and Fully Customizable
+The solution is tailored for each industry with full data privacy, security, and enterprise-level compliance.
+
+How It Works:
+
+Step 1: Customer Speaks
+Customers call and interact naturally with the AI assistant.
+
+Step 2: AI Understands Intent
+The system listens, interprets intent, and responds intelligently in real time.
+
+Step 3: Actions Executed
+The AI answers questions, handles requests, automates tasks, and records information.
+
+Step 4: Team Gets Instant Updates
+Staff receive real-time updates without manual effort.
+
+Industries Where Todung Can Be Used:
+
+Healthcare and Hospitals:
+- Smart triage and patient direction
+- Real-time doctor availability tracking
+- Department routing based on symptoms
+- Touchless check-in kiosks
+- QR-based appointment verification
+- Automated token generation
+- 24/7 FAQ handling
+- Multilingual support (Hindi, Bengali, English)
+- Patient education and comfort assistance
+- Emergency keyword detection and alerts
+- Instant notifications to medical staff
+
+Corporate Offices and Reception:
+- Visitor greeting and appointment verification
+- Staff arrival notifications
+- Touchless visitor check-in
+- Multilingual guest assistance
+
+Banks and Financial Services:
+- Answers banking service queries
+- Queue and counter direction
+- Automated token generation
+- Real-time service availability information
+
+Retail and Customer Care:
+- Product information assistance
+- Billing and service desk routing
+- Return and exchange policy FAQs
+
+Hotels and Hospitality:
+- Digital concierge for guests
+- Check-in guidance
+- Amenity and service information
+- Multilingual tourist assistance
+
+Government Offices:
+- Department guidance
+- Document requirement explanations
+- Appointment and ticket confirmation
+- Multilingual citizen support
+
+Educational Institutions:
+- Campus inquiry assistance
+- Administrative office directions
+- Admission and course FAQs
+- Attendance hours and department guidance
+
+Why Choose Todung:
+
+- Tailored Solutions:
+Customized services designed to meet specific business needs.
+
+- Customer Support:
+Dedicated support team available 24/7.
+
+- Affordable Pricing:
+Transparent, competitive pricing with no hidden fees.
+
+- Scalable Solutions:
+Services grow alongside your business needs.
+
+- Expert Team:
+Experienced professionals with deep industry expertise.
+
+Call to Action:
+Todung helps businesses automate support, boost customer engagement, and save time using AI-powered frontdesk automation.
+
+Company Description:
+We create intelligent, scalable AI solutions that help businesses work smarter, move faster, and achieve more.
+
+Contact Information:
+Phone: +91 89612 75478
+Email: sen@ebluesoft.in
+Address: Shrachi EK Tower, EKT/5/Office-B, Newtown, Kolkata, West Bengal 700161
