@@ -18,8 +18,9 @@ from langchain_core.messages import HumanMessage, AIMessage
 # ---------------------------------
 load_dotenv()
 
-GOOGLE_API_KEY = "AIzaSyC12yqpNhABCoXEyWSZzTww_ulv9AHuUpE"
-PINECONE_API_KEY = "pcsk_4vS2VH_3Z5Ck19AqgWSNebcJSyCpaRsVBddS4BrW1shwwzj65VLPyivimbLsD261utLoft"
+
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
 
 if not GOOGLE_API_KEY or not PINECONE_API_KEY:
     raise RuntimeError("Missing GOOGLE_API_KEY or PINECONE_API_KEY")
