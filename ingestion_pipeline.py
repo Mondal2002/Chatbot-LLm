@@ -1,67 +1,78 @@
 import os
 from dotenv import load_dotenv
-from sentence_transformers import SentenceTransformer
 from pinecone import Pinecone, ServerlessSpec
 
+from langchain_google_genai import GoogleGenerativeAIEmbeddings
+from langchain_pinecone import PineconeVectorStore
+from langchain_core.documents import Document
+
+# ---------------------------------
+# Load environment variables
+# ---------------------------------
 load_dotenv()
 
-# -------------------------------
-# Load ONE TXT document
-# -------------------------------
-def load_single_txt_file(txt_file_path):
-    print(f"Loading document from {txt_file_path}...")
+GOOGLE_API_KEY = "AIzaSyC12yqpNhABCoXEyWSZzTww_ulv9AHuUpE"
+PINECONE_API_KEY = "pcsk_4vS2VH_3Z5Ck19AqgWSNebcJSyCpaRsVBddS4BrW1shwwzj65VLPyivimbLsD261utLoft"
 
-    if not os.path.exists(txt_file_path):
-        raise FileNotFoundError(f"{txt_file_path} does not exist")
+INDEX_NAME = "gemini-rag-index2"
+NAMESPACE = "default"
 
-    with open(txt_file_path, "r", encoding="utf-8") as f:
-        text = f.read()
+# ---------------------------------
+# Load text file
+# ---------------------------------
+def load_text_file(path: str) -> str:
+    if not os.path.exists(path):
+        raise FileNotFoundError(f"{path} not found")
+    with open(path, "r", encoding="utf-8") as f:
+        return f.read()
 
-    print("Document loaded successfully")
-    print(f"Content length: {len(text)} characters")
-
-    return text
-
-
-# -------------------------------
-# Manual text chunking
-# -------------------------------
-def split_text(text, chunk_size=500, chunk_overlap=50):
-    print("Splitting text into chunks...")
-
+# ---------------------------------
+# Chunk text
+# ---------------------------------
+def split_text(text: str, chunk_size=500, overlap=50):
     chunks = []
     start = 0
-
     while start < len(text):
         end = start + chunk_size
-        chunk = text[start:end]
-        chunks.append(chunk)
-        start += chunk_size - chunk_overlap
-
-    print(f"Created {len(chunks)} chunks")
+        chunks.append(text[start:end])
+        start += chunk_size - overlap
     return chunks
 
+# ---------------------------------
+# Main ingestion logic
+# ---------------------------------
+def ingest():
+    print("🔹 Loading knowledge base...")
+    raw_text = load_text_file("Todung_knowledgebase.txt")
 
-# -------------------------------
-# Create Pinecone Vector Store
-# -------------------------------
-def create_vector_store(
-    chunks,
-    index_name="chatbot-index",
-    dimension=384,
-    namespace="default"
-):
-    print("Creating embeddings and storing in Pinecone...")
+    chunks = split_text(raw_text)
+    print(f"🔹 Created {len(chunks)} chunks")
 
-    embedder = SentenceTransformer("all-MiniLM-L6-v2")
+    documents = [
+        Document(
+            page_content=chunk,
+            metadata={"source": "Todung_knowledgebase.txt"}
+        )
+        for chunk in chunks
+    ]
 
-    pc = Pinecone(api_key="pcsk_4vS2VH_3Z5Ck19AqgWSNebcJSyCpaRsVBddS4BrW1shwwzj65VLPyivimbLsD261utLoft")
+    print("🔹 Initializing Gemini embeddings...")
+    embeddings = GoogleGenerativeAIEmbeddings(
+        model="models/text-embedding-004",
+        google_api_key=GOOGLE_API_KEY,
+        task_type="RETRIEVAL_DOCUMENT"
+    )
 
-    if index_name not in pc.list_indexes().names():
-        print("Creating Pinecone index...")
+    # ---------------------------------
+    # Pinecone setup
+    # ---------------------------------
+    pc = Pinecone(api_key=PINECONE_API_KEY)
+
+    if INDEX_NAME not in pc.list_indexes().names():
+        print("🔹 Creating Pinecone index...")
         pc.create_index(
-            name=index_name,
-            dimension=dimension,
+            name=INDEX_NAME,
+            dimension=768,           # REQUIRED for text-embedding-004
             metric="cosine",
             spec=ServerlessSpec(
                 cloud="aws",
@@ -69,40 +80,18 @@ def create_vector_store(
             )
         )
 
-    index = pc.Index(index_name)
+    print("🔹 Uploading embeddings to Pinecone...")
+    PineconeVectorStore.from_documents(
+        documents=documents,
+        embedding=embeddings,
+        index_name=INDEX_NAME,
+        namespace=NAMESPACE
+    )
 
-    vectors = []
-    embeddings = embedder.encode(chunks)
+    print("✅ Embeddings successfully stored in Pinecone")
 
-    for i, embedding in enumerate(embeddings):
-        vectors.append({
-            "id": f"chunk-{i}",
-            "values": embedding.tolist(),
-            "metadata": {
-                "text": chunks[i],
-                "source": "Todung_knowledgebase.txt"
-            }}
-        )
-
-    index.upsert(vectors=vectors, namespace=namespace)
-
-    print("Pinecone vector store created successfully")
-
-
-# -------------------------------
-# Main Pipeline
-# -------------------------------
-def main():
-    print("=== RAG Document Ingestion Pipeline ===\n")
-
-    TXT_FILE_PATH = "Todung_knowledgebase.txt"
-
-    text = load_single_txt_file(TXT_FILE_PATH)
-    chunks = split_text(text)
-    create_vector_store(chunks)
-
-    print("\n✅ Ingestion complete! Your data is now ready for RAG.")
-
-
+# ---------------------------------
+# Entry point
+# ---------------------------------
 if __name__ == "__main__":
-    main()
+    ingest()
