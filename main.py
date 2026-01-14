@@ -122,7 +122,7 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=["http://localhost:3000","https://chatbot-launch-in4lj53x7-subham-mondals-projects-4d6994ac.vercel.app"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -132,6 +132,7 @@ class RequestBody(BaseModel):
 
 @app.post("/chat")
 async def chat(body: RequestBody):
+    print("request recieved")
     loop = asyncio.get_running_loop()
     reply = await loop.run_in_executor(None, ask_question, body.question)
     return {"reply": reply}
