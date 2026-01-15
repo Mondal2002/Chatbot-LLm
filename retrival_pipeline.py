@@ -3,14 +3,21 @@ from dotenv import load_dotenv
 from sentence_transformers import SentenceTransformer
 from pinecone import Pinecone
 
+from langchain_google_genai import GoogleGenerativeAIEmbeddings
+
 load_dotenv()
 
-PINECONE_API_KEY = "pcsk_4vS2VH_3Z5Ck19AqgWSNebcJSyCpaRsVBddS4BrW1shwwzj65VLPyivimbLsD261utLoft"
-INDEX_NAME = "chatbot-index"
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
+INDEX_NAME = "gemini-rag-index2"
 NAMESPACE = "default"
 
 # Load model
-model = SentenceTransformer("all-MiniLM-L6-v2")
+model = GoogleGenerativeAIEmbeddings(
+    model="models/text-embedding-004",
+    google_api_key=GOOGLE_API_KEY,
+    task_type="RETRIEVAL_QUERY"
+)
 
 # Pinecone init
 pc = Pinecone(api_key=PINECONE_API_KEY)
@@ -19,8 +26,8 @@ index = pc.Index(INDEX_NAME)
 # Query
 query = "How can Todung help in hospitals?"
 
-# Embed query
-query_vector = model.encode(query).tolist()
+# Embed query# FIX: Use .embed_query() instead of .encode()
+query_vector = model.embed_query(query)
 
 # Search
 response = index.query(

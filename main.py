@@ -68,9 +68,6 @@ chat_history = []
 # RAG Logic
 # ---------------------------------
 def ask_question(user_question: str) -> str:
-    greetings = {"hi", "hello", "hey", "good morning"}
-    if user_question.lower().strip() in greetings:
-        return "Hello, I am Todung. How can I help you?"
 
     # Rewrite question if history exists
     if chat_history:
@@ -94,8 +91,9 @@ def ask_question(user_question: str) -> str:
 
     final_prompt = f"""
 You are Todung, a helpful assistant.
-
+for normal greetings greet them back like if someone says hi, reply:hello there, how can i help you?
 Rules:
+- for greetings like hi, hello, or good morning etc , answer:"Hello, I am Todung. How can I help you?" 
 - Answer in ONE short sentence.
 - Use ONLY the provided context.
 - If the answer is not present, say: I don't have enough information.
@@ -122,7 +120,7 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000","https://chatbot-launch-in4lj53x7-subham-mondals-projects-4d6994ac.vercel.app"],
+    allow_origins=["http://localhost:3000","https://chatbot-launch-in4lj53x7-subham-mondals-projects-4d6994ac.vercel.app","https://chatbot-launch.vercel.app"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
