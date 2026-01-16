@@ -1,4 +1,5 @@
 import os
+import re
 from dotenv import load_dotenv
 from pinecone import Pinecone, ServerlessSpec
 
@@ -11,12 +12,11 @@ from langchain_core.documents import Document
 # ---------------------------------
 load_dotenv()
 
-
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
 
-INDEX_NAME = "gemini-rag-index4"
-NAMESPACE = "default"
+INDEX_NAME = "gemini-rag-index3"
+NAMESPACE = "todung"
 
 # ---------------------------------
 # Load text file
@@ -28,16 +28,41 @@ def load_text_file(path: str) -> str:
         return f.read()
 
 # ---------------------------------
-# Chunk text
+# Parse embedding-ready chunks
 # ---------------------------------
-def split_text(text: str, chunk_size=500, overlap=50):
-    chunks = []
-    start = 0
-    while start < len(text):
-        end = start + chunk_size
-        chunks.append(text[start:end])
-        start += chunk_size - overlap
-    return chunks
+def parse_chunks(text: str):
+    raw_chunks = re.split(r"=== CHUNK \d+ ===", text)
+    documents = []
+
+    for chunk in raw_chunks:
+        chunk = chunk.strip()
+        if not chunk:
+            continue
+
+        title = re.search(r"TITLE:\s*(.*)", chunk)
+        section = re.search(r"SECTION:\s*(.*)", chunk)
+        industry = re.search(r"INDUSTRY:\s*(.*)", chunk)
+
+        content = re.sub(
+            r"TITLE:.*\nSECTION:.*\nINDUSTRY:.*\n",
+            "",
+            chunk,
+            flags=re.DOTALL
+        ).strip()
+
+        documents.append(
+            Document(
+                page_content=content,
+                metadata={
+                    "title": title.group(1).strip() if title else "unknown",
+                    "section": section.group(1).strip() if section else "unknown",
+                    "industry": industry.group(1).strip() if industry else "generic",
+                    "source": "Todung_knowledgebase2.txt"
+                }
+            )
+        )
+
+    return documents
 
 # ---------------------------------
 # Main ingestion logic
@@ -46,16 +71,8 @@ def ingest():
     print("🔹 Loading knowledge base...")
     raw_text = load_text_file("Todung_knowledgebase2.txt")
 
-    chunks = split_text(raw_text)
-    print(f"🔹 Created {len(chunks)} chunks")
-
-    documents = [
-        Document(
-            page_content=chunk,
-            metadata={"source": "Todung_knowledgebase2.txt"}
-        )
-        for chunk in chunks
-    ]
+    documents = parse_chunks(raw_text)
+    print(f"🔹 Parsed {len(documents)} semantic chunks")
 
     print("🔹 Initializing Gemini embeddings...")
     embeddings = GoogleGenerativeAIEmbeddings(
@@ -64,16 +81,13 @@ def ingest():
         task_type="RETRIEVAL_DOCUMENT"
     )
 
-    # ---------------------------------
-    # Pinecone setup
-    # ---------------------------------
     pc = Pinecone(api_key=PINECONE_API_KEY)
 
     if INDEX_NAME not in pc.list_indexes().names():
         print("🔹 Creating Pinecone index...")
         pc.create_index(
             name=INDEX_NAME,
-            dimension=768,           # REQUIRED for text-embedding-004
+            dimension=768,
             metric="cosine",
             spec=ServerlessSpec(
                 cloud="aws",
@@ -89,7 +103,7 @@ def ingest():
         namespace=NAMESPACE
     )
 
-    print("✅ Embeddings successfully stored in Pinecone")
+    print("✅ Todung knowledge base successfully indexed")
 
 # ---------------------------------
 # Entry point

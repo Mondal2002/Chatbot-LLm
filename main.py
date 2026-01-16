@@ -18,24 +18,25 @@ from langchain_core.messages import HumanMessage, AIMessage
 # ---------------------------------
 load_dotenv()
 
-
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
-
-if not GOOGLE_API_KEY or not PINECONE_API_KEY:
-    raise RuntimeError("Missing GOOGLE_API_KEY or PINECONE_API_KEY")
 
 INDEX_NAME = "gemini-rag-index2"
 NAMESPACE = "default"
 
 # ---------------------------------
-# Gemini Embeddings (QUERY SIDE)
+# Gemini Embeddings & LLM
 # ---------------------------------
-# IMPORTANT: RETRIEVAL_QUERY is REQUIRED here
 embeddings = GoogleGenerativeAIEmbeddings(
     model="models/text-embedding-004",
     google_api_key=GOOGLE_API_KEY,
     task_type="RETRIEVAL_QUERY"
+)
+
+llm = ChatGoogleGenerativeAI(
+    model="gemini-2.5-flash", # Updated to current stable version
+    google_api_key=GOOGLE_API_KEY,
+    temperature=0.2,
 )
 
 # ---------------------------------
@@ -43,74 +44,95 @@ embeddings = GoogleGenerativeAIEmbeddings(
 # ---------------------------------
 pc = Pinecone(api_key=PINECONE_API_KEY)
 index = pc.Index(INDEX_NAME)
-
-vectorstore = PineconeVectorStore(
-    index=index,
-    embedding=embeddings,
-    namespace=NAMESPACE
-)
-
+vectorstore = PineconeVectorStore(index=index, embedding=embeddings, namespace=NAMESPACE)
 retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
 
 # ---------------------------------
-# Gemini LLM
+# Memory Management State
 # ---------------------------------
-llm = ChatGoogleGenerativeAI(
-    model="gemini-2.5-flash",
-    google_api_key=GOOGLE_API_KEY,
-    temperature=0.2,
-)
+# In production, use a dictionary keyed by session_id
+memory_store = {
+    "conversation_summary": "",
+    "recent_messages": [], # List of BaseMessages
+}
+MAX_RECENT_MESSAGES = 8  # N turns (3 Human + 3 AI)
 
-# ⚠️ Global memory (OK for demo, NOT for production)
-chat_history = []
+def summarize_messages(summary: str, recent_msgs: list) -> str:
+    """Summarizes recent messages and merges them with the existing summary."""
+    history_text = "\n".join([f"{'User' if isinstance(m, HumanMessage) else 'Assistant'}: {m.content}" for m in recent_msgs])
+    
+    summary_prompt = (
+        f"Current Summary: {summary}\n\n"
+        f"New Messages to incorporate:\n{history_text}\n\n"
+        "Generate a concise updated summary of the conversation so far."
+    )
+    response = llm.invoke(summary_prompt)
+    return response.content.strip()
 
 # ---------------------------------
 # RAG Logic
 # ---------------------------------
 def ask_question(user_question: str) -> str:
+    global memory_store
 
-    # Rewrite question if history exists
-    if chat_history:
-        history_text = "\n".join(msg.content for msg in chat_history)
-        rewrite_prompt = (
-            "Rewrite the following question to be standalone.\n\n"
-            f"History:\n{history_text}\n\n"
-            f"Question: {user_question}"
-        )
-        search_question = llm.invoke(rewrite_prompt).content.strip()
-    else:
-        search_question = user_question
+    # 1. Load session memory
+    summary = memory_store["conversation_summary"]
+    recent_msgs = memory_store["recent_messages"]
 
-    # Retrieve context
+    # 2. Build History Text for Query Rewriting/Context
+    history_text = "\n".join([f"{'User' if isinstance(m, HumanMessage) else 'Assistant'}: {m.content}" for m in recent_msgs])
+    
+    # 3. Rewrite question to be standalone (Context-Aware)
+    rewrite_prompt = (
+        f"Summary of conversation: {summary}\n"
+        f"Recent History: {history_text}\n"
+        f"Question: {user_question}\n"
+        "Given the history and summary, rewrite the question to be a standalone search query."
+    )
+    search_question = llm.invoke(rewrite_prompt).content.strip()
+
+    # 4. Retrieve context from Pinecone
     docs = retriever.invoke(search_question)
+    context = "\n".join(doc.page_content for doc in docs) if docs else "No relevant context found."
 
-    if not docs:
-        return "I don't have enough information."
-
-    context = "\n".join(doc.page_content for doc in docs)
-
+    # 5. Build final prompt with Summary + Recent + Context
     final_prompt = f"""
 You are Todung, a helpful assistant.
-for normal greetings greet them back like if someone says hi, reply:hello there, how can i help you?
 Rules:
-- for greetings like hi, hello, or good morning etc , answer:"Hello, I am Todung. How can I help you?" 
+- For greetings (hi, hello, etc.), reply: "Hello, I am Todung. How can I help you?"
 - Answer in ONE short sentence.
-- Use ONLY the provided context.
-- If the answer is not present, say: I don't have enough information.
+- Use the provided Context and Conversation Summary to inform your answer.
+- If the answer is not in the context, say: I don't have enough information.
 
-Context:
-{context}
+Conversation Summary: {summary}
+Recent History: {history_text}
+Context: {context}
 
-User Question:
-{user_question}
+User Question: {user_question}
 """
 
     response = llm.invoke(final_prompt)
     answer = response.content.strip()
 
-    chat_history.append(HumanMessage(content=user_question))
-    chat_history.append(AIMessage(content=answer))
+    # 6. Update recent_messages
+    recent_msgs.append(HumanMessage(content=user_question))
+    recent_msgs.append(AIMessage(content=answer))
 
+    # 7. Check limit and summarize if necessary
+    if len(recent_msgs) >= MAX_RECENT_MESSAGES:
+        # Update summary with these messages
+        new_summary = summarize_messages(summary, recent_msgs)
+        memory_store["conversation_summary"] = new_summary
+        # Clear recent messages after merging into summary
+        memory_store["recent_messages"] = []
+    else:
+        memory_store["recent_messages"] = recent_msgs
+
+    # print("this is the summery")
+    # print(summary)
+    # print("this is the chat history",history_text)
+    # print("this is the context")
+    # print(context)
     return answer
 
 # ---------------------------------

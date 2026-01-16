@@ -1,0 +1,60 @@
+Todung is an enterprise-grade AI Frontdesk platform that automates inbound and outbound customer interactions using human-like conversational AI. It answers calls, books appointments, handles queries, executes workflows, and provides real-time updates to teams, enabling organizations to operate 24/7 without manual frontdesk staffing.
+
+Todung’s vision is to become the default intelligent frontdesk for organizations worldwide. Its mission is to eliminate manual frontdesk inefficiencies through secure, scalable, and industry-ready conversational AI solutions.
+
+Todung provides an always-available AI frontdesk that autonomously answers calls, assists customers, books and manages appointments, automates repetitive interactions, and integrates seamlessly with enterprise systems.
+
+Todung’s conversational AI engine supports natural language understanding with contextual memory, human-like voice modulation, interruption handling, sentiment awareness, and multilingual speech recognition and response.
+
+Todung handles inbound and outbound calls, replaces traditional IVR systems, records and transcribes calls, recovers missed calls automatically, and transfers conversations to human agents when escalation is required.
+
+Todung automates appointment booking, rescheduling, and cancellation. It synchronizes with calendars, sends reminders through calls or messages, and reduces no-shows through automated confirmation workflows.
+
+Todung automates operational workflows such as task creation, CRM updates, ticket generation, and rule-based or AI-driven decision execution without human intervention.
+
+Todung provides real-time alerts to staff via SMS, email, WhatsApp, or applications. Live dashboards display call volume, queues, SLA metrics, and operational load.
+
+Customers initiate interaction by calling or engaging through supported channels. Todung immediately answers and begins conversational interaction without wait times.
+
+Todung identifies callers using available metadata, loads conversation context, detects user intent in real time, and validates required information before proceeding.
+
+Based on detected intent, Todung executes actions such as answering questions, booking appointments, routing calls, triggering workflows, or escalating to human staff.
+
+Todung confirms completed actions with the customer and logs all interactions for analytics, auditing, and compliance purposes.
+
+Todung performs smart triage by understanding patient symptoms and routing them to the appropriate department or medical professional based on urgency and availability.
+
+Todung provides real-time doctor availability, bed status, and department capacity information by integrating with hospital systems.
+
+Todung detects predefined emergency keywords such as severe pain or unconsciousness and triggers priority alerts and instant escalation to medical staff.
+
+Todung automates follow-up calls, medication reminders, appointment confirmations, and patient education using multilingual conversational AI.
+
+Todung greets visitors, verifies appointments, sends staff arrival notifications, and enables touchless check-in for corporate offices.
+
+Todung routes calls to the correct departments, provides employee directory assistance, and automates HR or IT helpdesk queries.
+
+Todung answers banking service queries, provides branch or counter availability information, and supports queue and token-based routing.
+
+Todung assists customers with product information, billing queries, return and exchange policies, and routes calls to service desks.
+
+Todung acts as a digital concierge by assisting guests with check-in guidance, amenities, room services, and multilingual tourist information.
+
+Todung provides department guidance, document requirement explanations, appointment confirmations, and multilingual citizen support for government offices.
+
+Todung assists students and parents with admission queries, course information, office directions, campus navigation, and administrative FAQs.
+
+Todung implements end-to-end encryption, role-based access control, audit logs, data residency options, and enterprise-grade privacy and security practices.
+
+Todung integrates with CRM systems, hospital information systems, ERP platforms, calendars, messaging services, and provides API-based extensibility.
+
+Todung delivers insights on call volume, intent distribution, resolution rates, customer satisfaction indicators, and operational efficiency.
+
+Todung reduces operational costs, improves response times, increases customer satisfaction, provides 24/7 availability, and scales across departments and locations.
+
+Todung offers flexible subscription pricing, pay-as-you-scale models, cloud or on-premise deployment, and rapid onboarding.
+
+Todung combines enterprise-ready architecture, industry-focused customization, reliable support, transparent pricing, and deep conversational AI expertise.
+
+Todung helps businesses automate support and customer engagement using AI-powered frontdesk automation. Phone: +91 89612 75478. Email: sen@ebluesoft.in
+. Address: Shrachi EK Tower, Newtown, Kolkata, West Bengal 700161.
