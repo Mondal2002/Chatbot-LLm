@@ -21,7 +21,7 @@ load_dotenv()
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
 
-INDEX_NAME = "gemini-rag-index2"
+INDEX_NAME = "gemini-rag-index4"
 NAMESPACE = "default"
 
 # ---------------------------------
