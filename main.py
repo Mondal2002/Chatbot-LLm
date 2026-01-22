@@ -8,10 +8,13 @@ from dotenv import load_dotenv
 from pinecone import Pinecone
 from langchain_pinecone import PineconeVectorStore
 from langchain_google_genai import (
-    ChatGoogleGenerativeAI,
+    # ChatGoogleGenerativeAI,
     GoogleGenerativeAIEmbeddings
 )
 from langchain_core.messages import HumanMessage, AIMessage
+import boto3
+import json
+from botocore.exceptions import ClientError
 
 # ---------------------------------
 # Load environment variables
@@ -33,12 +36,50 @@ embeddings = GoogleGenerativeAIEmbeddings(
     task_type="RETRIEVAL_QUERY"
 )
 
-llm = ChatGoogleGenerativeAI(
-    model="gemini-2.5-flash", # Updated to current stable version
-    google_api_key=GOOGLE_API_KEY,
-    temperature=0.2,
-)
+# llm = ChatGoogleGenerativeAI(
+#     model="gemini-2.5-flash", # Updated to current stable version
+#     google_api_key=GOOGLE_API_KEY,
+#     temperature=0.2,
+# )
 
+def invoke_mistral(
+    prompt: str,
+    region: str = "us-east-1",
+    model_id: str = "mistral.mistral-large-2402-v1:0",
+    max_tokens: int = 512,
+    temperature: float = 0.5,
+) -> str:
+    """
+    Invoke Mistral Large via AWS Bedrock and return the generated text.
+
+    :param prompt: User prompt text
+    :param region: AWS region where Bedrock is enabled
+    :param model_id: Bedrock model ID
+    :param max_tokens: Maximum tokens to generate
+    :param temperature: Sampling temperature
+    :return: Generated text response
+    """
+
+    client = boto3.client("bedrock-runtime", region_name=region)
+
+    formatted_prompt = f"<s>[INST] {prompt} [/INST]"
+
+    request_body = {
+        "prompt": formatted_prompt,
+        "max_tokens": max_tokens,
+        "temperature": temperature,
+    }
+
+    try:
+        response = client.invoke_model(
+            modelId=model_id,
+            body=json.dumps(request_body)
+        )
+    except (ClientError, Exception) as e:
+        raise RuntimeError(f"Failed to invoke model '{model_id}': {e}")
+
+    model_response = json.loads(response["body"].read())
+    return model_response["outputs"][0]["text"]
 # ---------------------------------
 # Pinecone Setup
 # ---------------------------------
@@ -66,7 +107,7 @@ def summarize_messages(summary: str, recent_msgs: list) -> str:
         f"New Messages to incorporate:\n{history_text}\n\n"
         "Generate a concise updated summary of the conversation so far."
     )
-    response = llm.invoke(summary_prompt)
+    response = invoke_mistral( summary_prompt)
     return response.content.strip()
 
 # ---------------------------------
@@ -89,7 +130,7 @@ def ask_question(user_question: str) -> str:
         f"Question: {user_question}\n"
         "Given the history and summary, rewrite the question to be a standalone search query."
     )
-    search_question = llm.invoke(rewrite_prompt).content.strip()
+    search_question = invoke_mistral(rewrite_prompt).content.strip()
 
     # 4. Retrieve context from Pinecone
     docs = retriever.invoke(search_question)
@@ -111,7 +152,7 @@ Context: {context}
 User Question: {user_question}
 """
 
-    response = llm.invoke(final_prompt)
+    response = invoke_mistral(final_prompt)
     answer = response.content.strip()
 
     # 6. Update recent_messages
@@ -155,4 +196,5 @@ async def chat(body: RequestBody):
     print("request recieved")
     loop = asyncio.get_running_loop()
     reply = await loop.run_in_executor(None, ask_question, body.question)
+    print(reply)
     return {"reply": reply}
