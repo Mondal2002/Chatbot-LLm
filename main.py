@@ -96,85 +96,174 @@ memory_store = {
     "conversation_summary": "",
     "recent_messages": [], # List of BaseMessages
 }
-MAX_RECENT_MESSAGES = 8  # N turns (3 Human + 3 AI)
+# MAX_RECENT_MESSAGES = 8  # N turns (3 Human + 3 AI)
 
-def summarize_messages(summary: str, recent_msgs: list) -> str:
-    """Summarizes recent messages and merges them with the existing summary."""
-    history_text = "\n".join([f"{'User' if isinstance(m, HumanMessage) else 'Assistant'}: {m.content}" for m in recent_msgs])
+# def summarize_messages(summary: str, recent_msgs: list) -> str:
+#     """Summarizes recent messages and merges them with the existing summary."""
+#     history_text = "\n".join([f"{'User' if isinstance(m, HumanMessage) else 'Assistant'}: {m.content}" for m in recent_msgs])
     
-    summary_prompt = (
-        f"Current Summary: {summary}\n\n"
-        f"New Messages to incorporate:\n{history_text}\n\n"
-        "Generate a concise updated summary of the conversation so far."
+#     summary_prompt = (
+#         f"Current Summary: {summary}\n\n"
+#         f"New Messages to incorporate:\n{history_text}\n\n"
+#         "Generate a concise updated summary of the conversation so far."
+#     )
+#     response = invoke_mistral( summary_prompt)
+#     return response.strip()
+
+MAX_RECENT_MESSAGES = 8          # 3 Human + 3 AI
+MAX_SUMMARIES = 3
+MAX_SUMMARY_CHARS = 1200
+
+def summarize_messages(previous_summaries: list[str], recent_msgs: list) -> str:
+    history_text = "\n".join(
+        f"{'User' if isinstance(m, HumanMessage) else 'Assistant'}: {m.content}"
+        for m in recent_msgs
     )
-    response = invoke_mistral( summary_prompt)
-    return response.strip()
+
+    summaries_text = "\n".join(previous_summaries)
+
+    prompt = (
+        f"Previous conversation summaries:\n{summaries_text}\n\n"
+        f"New messages:\n{history_text}\n\n"
+        "Create a concise summary capturing only important facts, decisions, and context."
+    )
+
+    summary = invoke_mistral(prompt).strip()
+    return summary[:MAX_SUMMARY_CHARS]
 
 
 # ---------------------------------
 # RAG Logic
 # ---------------------------------
+# def ask_question(user_question: str) -> str:
+#     global memory_store
+
+#     # 1. Load session memory
+#     summary = memory_store["conversation_summary"]
+#     recent_msgs = memory_store["recent_messages"]
+
+#     # 2. Build History Text for Query Rewriting/Context
+#     history_text = "\n".join([f"{'User' if isinstance(m, HumanMessage) else 'Assistant'}: {m.content}" for m in recent_msgs])
+    
+#     # 3. Rewrite question to be standalone (Context-Aware)
+#     rewrite_prompt = (
+#         f"Summary of conversation: {summary}\n"
+#         f"Recent History: {history_text}\n"
+#         f"Question: {user_question}\n"
+#         "Given the history and summary, rewrite the question to be a standalone search query."
+#     )
+#     search_question = invoke_mistral(rewrite_prompt).strip()
+
+#     # 4. Retrieve context from Pinecone
+#     docs = retriever.invoke(search_question)
+#     context = "\n".join(doc.page_content for doc in docs) if docs else "No relevant context found."
+
+#     # 5. Build final prompt with Summary + Recent + Context
+#     final_prompt = f"""
+# You are Todung, a helpful assistant.
+# Rules:
+# - For greetings (hi, hello, etc.), reply: "Hello, I am Todung. How can I help you?"
+# - Answer in ONE short sentence.
+# - Use the provided Context and Conversation Summary to inform your answer.
+# - If the answer is not in the context, say: I don't have enough information.
+
+# Conversation Summary: {summary}
+# Recent History: {history_text}
+# Context: {context}
+
+# User Question: {user_question}
+# """
+
+#     response = invoke_mistral(final_prompt)
+#     answer = response.strip()
+
+#     # 6. Update recent_messages
+#     recent_msgs.append(HumanMessage(content=user_question))
+#     recent_msgs.append(AIMessage(content=answer))
+
+#     # 7. Check limit and summarize if necessary
+#     if len(recent_msgs) >= MAX_RECENT_MESSAGES:
+#         # Update summary with these messages
+#         new_summary = summarize_messages(summary, recent_msgs)
+#         memory_store["conversation_summary"] = new_summary
+#         # Clear recent messages after merging into summary
+#         memory_store["recent_messages"] = []
+#     else:
+#         memory_store["recent_messages"] = recent_msgs
+
+#     # print("this is the summery")
+#     # print(summary)
+#     # print("this is the chat history",history_text)
+#     # print("this is the context")
+#     # print(context)
+#     return answer
 def ask_question(user_question: str) -> str:
     global memory_store
 
-    # 1. Load session memory
-    summary = memory_store["conversation_summary"]
+    summaries = memory_store["summaries"]
     recent_msgs = memory_store["recent_messages"]
 
-    # 2. Build History Text for Query Rewriting/Context
-    history_text = "\n".join([f"{'User' if isinstance(m, HumanMessage) else 'Assistant'}: {m.content}" for m in recent_msgs])
-    
-    # 3. Rewrite question to be standalone (Context-Aware)
+    summaries_text = "\n".join(summaries)
+
+    history_text = "\n".join(
+        f"{'User' if isinstance(m, HumanMessage) else 'Assistant'}: {m.content}"
+        for m in recent_msgs
+    )
+
+    # 1. Rewrite question
     rewrite_prompt = (
-        f"Summary of conversation: {summary}\n"
-        f"Recent History: {history_text}\n"
+        f"Conversation summaries:\n{summaries_text}\n"
+        f"Recent history:\n{history_text}\n"
         f"Question: {user_question}\n"
-        "Given the history and summary, rewrite the question to be a standalone search query."
+        "Rewrite this as a standalone search query."
     )
     search_question = invoke_mistral(rewrite_prompt).strip()
 
-    # 4. Retrieve context from Pinecone
+    # 2. Retrieve RAG context
     docs = retriever.invoke(search_question)
-    context = "\n".join(doc.page_content for doc in docs) if docs else "No relevant context found."
+    context = "\n".join(d.page_content for d in docs) if docs else "No relevant context found."
 
-    # 5. Build final prompt with Summary + Recent + Context
+    # 3. Final answer prompt
     final_prompt = f"""
 You are Todung, a helpful assistant.
 Rules:
-- For greetings (hi, hello, etc.), reply: "Hello, I am Todung. How can I help you?"
-- Answer in ONE short sentence.
-- Use the provided Context and Conversation Summary to inform your answer.
-- If the answer is not in the context, say: I don't have enough information.
+- Greet only if user greets
+- Answer in ONE short sentence
+- Use summaries and context
+- If insufficient info, say: I don't have enough information.
 
-Conversation Summary: {summary}
-Recent History: {history_text}
-Context: {context}
+Conversation Summaries:
+{summaries_text}
 
-User Question: {user_question}
+Recent History:
+{history_text}
+
+Context:
+{context}
+
+User Question:
+{user_question}
 """
 
-    response = invoke_mistral(final_prompt)
-    answer = response.strip()
+    answer = invoke_mistral(final_prompt).strip()
 
-    # 6. Update recent_messages
+    # 4. Update recent memory
     recent_msgs.append(HumanMessage(content=user_question))
     recent_msgs.append(AIMessage(content=answer))
 
-    # 7. Check limit and summarize if necessary
+    # 5. Summarize if buffer full
     if len(recent_msgs) >= MAX_RECENT_MESSAGES:
-        # Update summary with these messages
-        new_summary = summarize_messages(summary, recent_msgs)
-        memory_store["conversation_summary"] = new_summary
-        # Clear recent messages after merging into summary
+        new_summary = summarize_messages(summaries, recent_msgs)
+
+        summaries.append(new_summary)
+        if len(summaries) > MAX_SUMMARIES:
+            summaries.pop(0)  # forget oldest summary
+
         memory_store["recent_messages"] = []
+        memory_store["summaries"] = summaries
     else:
         memory_store["recent_messages"] = recent_msgs
 
-    # print("this is the summery")
-    # print(summary)
-    # print("this is the chat history",history_text)
-    # print("this is the context")
-    # print(context)
     return answer
 
 # ---------------------------------
