@@ -108,7 +108,8 @@ def summarize_messages(summary: str, recent_msgs: list) -> str:
         "Generate a concise updated summary of the conversation so far."
     )
     response = invoke_mistral( summary_prompt)
-    return response.content.strip()
+    return response.strip()
+
 
 # ---------------------------------
 # RAG Logic
@@ -130,7 +131,7 @@ def ask_question(user_question: str) -> str:
         f"Question: {user_question}\n"
         "Given the history and summary, rewrite the question to be a standalone search query."
     )
-    search_question = invoke_mistral(rewrite_prompt).content.strip()
+    search_question = invoke_mistral(rewrite_prompt).strip()
 
     # 4. Retrieve context from Pinecone
     docs = retriever.invoke(search_question)
@@ -153,7 +154,7 @@ User Question: {user_question}
 """
 
     response = invoke_mistral(final_prompt)
-    answer = response.content.strip()
+    answer = response.strip()
 
     # 6. Update recent_messages
     recent_msgs.append(HumanMessage(content=user_question))
