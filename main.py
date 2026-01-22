@@ -145,19 +145,19 @@ def ask_question(user_question: str) -> str:
         for m in recent
     )
 
-    rewrite_prompt = f"""
-Conversation summaries:
-{summaries_text}
+#     rewrite_prompt = f"""
+# Conversation summaries:
+# {summaries_text}
 
-Recent history:
-{history_text}
+# Recent history:
+# {history_text}
 
-Question:
-{user_question}
+# Question:
+# {user_question}
 
-Rewrite as a standalone search query.
-"""
-    search_query = invoke_mistral(rewrite_prompt)
+# Rewrite as a standalone search query.
+# """
+    search_query = user_question
 
     docs = retriever.invoke(search_query)
     context = "\n".join(d.page_content for d in docs) if docs else ""
