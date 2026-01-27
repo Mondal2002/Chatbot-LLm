@@ -26,7 +26,8 @@ index = pc.Index(INDEX_NAME)
 # Query
 query = "How can Todung help in hospitals?"
 
-# Embed query# FIX: Use .embed_query() instead of .encode()
+# Embed query
+# FIX: Use .embed_query() instead of .encode()
 query_vector = model.embed_query(query)
 
 # Search

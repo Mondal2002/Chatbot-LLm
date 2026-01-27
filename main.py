@@ -29,12 +29,10 @@ INDEX_NAME = "gemini-rag-index4"
 NAMESPACE = "default"
 
 # ---------------------------------
-# Threading & Locks
+# Threading
 # ---------------------------------
 answer_executor = ThreadPoolExecutor(max_workers=1)
 summary_executor = ThreadPoolExecutor(max_workers=1)
-
-memory_lock = threading.Lock()
 bedrock_lock = threading.Lock()
 
 # ---------------------------------
@@ -59,13 +57,10 @@ def invoke_mistral(prompt: str) -> str:
             "temperature": 0.5,
         }
 
-        try:
-            response = client.invoke_model(
-                modelId="mistral.mistral-large-2402-v1:0",
-                body=json.dumps(body),
-            )
-        except (ClientError, Exception) as e:
-            raise RuntimeError(f"Bedrock invocation failed: {e}")
+        response = client.invoke_model(
+            modelId="mistral.mistral-large-2402-v1:0",
+            body=json.dumps(body),
+        )
 
         payload = json.loads(response["body"].read())
         return payload["outputs"][0]["text"].strip()
@@ -85,24 +80,35 @@ vectorstore = PineconeVectorStore(
 retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
 
 # ---------------------------------
-# Memory
+# Memory (PER USER, IN-MEMORY)
 # ---------------------------------
 MAX_RECENT_MESSAGES = 8
 MAX_SUMMARIES = 3
 MAX_SUMMARY_CHARS = 1200
 
-memory_store = {
-    "summaries": [],
-    "recent_messages": [],
-}
+memory_store = {}   # user_id -> memory
+memory_locks = {}   # user_id -> lock
+
+
+def get_user_memory(user_id: str):
+    if user_id not in memory_store:
+        memory_store[user_id] = {
+            "summaries": [],
+            "recent_messages": [],
+        }
+        memory_locks[user_id] = threading.Lock()
+
+    return memory_store[user_id], memory_locks[user_id]
 
 # ---------------------------------
 # Background Summarization
 # ---------------------------------
-def run_summarization():
-    with memory_lock:
-        recent = memory_store["recent_messages"][:]
-        summaries = memory_store["summaries"][:]
+def run_summarization(user_id: str):
+    memory, lock = get_user_memory(user_id)
+
+    with lock:
+        recent = memory["recent_messages"][:]
+        summaries = memory["summaries"][:]
 
     history_text = "\n".join(
         f"{'User' if isinstance(m, HumanMessage) else 'Assistant'}: {m.content}"
@@ -123,21 +129,20 @@ Create a concise factual summary capturing only important context.
 
     summary = invoke_mistral(prompt)[:MAX_SUMMARY_CHARS]
 
-    with memory_lock:
+    with lock:
         summaries.append(summary)
-        if len(summaries) > MAX_SUMMARIES:
-            summaries.pop(0)
-
-        memory_store["summaries"] = summaries
-        memory_store["recent_messages"] = []
+        summaries[:] = summaries[-MAX_SUMMARIES:]
+        memory["recent_messages"] = []
 
 # ---------------------------------
 # Main RAG Logic
 # ---------------------------------
-def ask_question(user_question: str) -> str:
-    with memory_lock:
-        summaries = memory_store["summaries"][:]
-        recent = memory_store["recent_messages"][:]
+def ask_question(user_id: str, user_question: str) -> str:
+    memory, lock = get_user_memory(user_id)
+
+    with lock:
+        summaries = memory["summaries"][:]
+        recent = memory["recent_messages"][:]
 
     summaries_text = "\n".join(summaries)
     history_text = "\n".join(
@@ -145,21 +150,7 @@ def ask_question(user_question: str) -> str:
         for m in recent
     )
 
-#     rewrite_prompt = f"""
-# Conversation summaries:
-# {summaries_text}
-
-# Recent history:
-# {history_text}
-
-# Question:
-# {user_question}
-
-# Rewrite as a standalone search query.
-# """
-    search_query = user_question
-
-    docs = retriever.invoke(search_query)
+    docs = retriever.invoke(user_question)
     context = "\n".join(d.page_content for d in docs) if docs else ""
 
     final_prompt = f"""
@@ -183,14 +174,15 @@ Context:
 User question:
 {user_question}
 """
+
     answer = invoke_mistral(final_prompt)
 
-    with memory_lock:
-        memory_store["recent_messages"].append(HumanMessage(content=user_question))
-        memory_store["recent_messages"].append(AIMessage(content=answer))
+    with lock:
+        memory["recent_messages"].append(HumanMessage(content=user_question))
+        memory["recent_messages"].append(AIMessage(content=answer))
 
-        if len(memory_store["recent_messages"]) >= MAX_RECENT_MESSAGES:
-            summary_executor.submit(run_summarization)
+        if len(memory["recent_messages"]) >= MAX_RECENT_MESSAGES:
+            summary_executor.submit(run_summarization, user_id)
 
     return answer
 
@@ -210,15 +202,240 @@ app.add_middleware(
 )
 
 class RequestBody(BaseModel):
+    user_id: str
     question: str
 
 @app.post("/chat")
 async def chat(body: RequestBody):
     loop = asyncio.get_running_loop()
     answer = await loop.run_in_executor(
-        answer_executor, ask_question, body.question
+        answer_executor,
+        ask_question,
+        body.user_id,
+        body.question
     )
+    print(body.user_id)
     return {"reply": answer}
+
+# # ---------------------------------
+# # Environment
+# # ---------------------------------
+# load_dotenv()
+
+# GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+# PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
+
+# INDEX_NAME = "gemini-rag-index4"
+# NAMESPACE = "default"
+
+# # ---------------------------------
+# # Threading & Locks
+# # ---------------------------------
+# answer_executor = ThreadPoolExecutor(max_workers=1)
+# summary_executor = ThreadPoolExecutor(max_workers=1)
+
+# memory_lock = threading.Lock()
+# bedrock_lock = threading.Lock()
+
+# # ---------------------------------
+# # Embeddings
+# # ---------------------------------
+# embeddings = GoogleGenerativeAIEmbeddings(
+#     model="models/text-embedding-004",
+#     google_api_key=GOOGLE_API_KEY,
+#     task_type="RETRIEVAL_QUERY",
+# )
+
+# # ---------------------------------
+# # Bedrock – Mistral
+# # ---------------------------------
+# def invoke_mistral(prompt: str) -> str:
+#     with bedrock_lock:
+#         client = boto3.client("bedrock-runtime", region_name="us-east-1")
+
+#         body = {
+#             "prompt": f"<s>[INST] {prompt} [/INST]",
+#             "max_tokens": 512,
+#             "temperature": 0.5,
+#         }
+
+#         try:
+#             response = client.invoke_model(
+#                 modelId="mistral.mistral-large-2402-v1:0",
+#                 body=json.dumps(body),
+#             )
+#         except (ClientError, Exception) as e:
+#             raise RuntimeError(f"Bedrock invocation failed: {e}")
+
+#         payload = json.loads(response["body"].read())
+#         return payload["outputs"][0]["text"].strip()
+
+# # ---------------------------------
+# # Pinecone
+# # ---------------------------------
+# pc = Pinecone(api_key=PINECONE_API_KEY)
+# index = pc.Index(INDEX_NAME)
+
+# vectorstore = PineconeVectorStore(
+#     index=index,
+#     embedding=embeddings,
+#     namespace=NAMESPACE,
+# )
+
+# retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
+
+# # ---------------------------------
+# # Memory
+# # ---------------------------------
+# MAX_RECENT_MESSAGES = 8
+# MAX_SUMMARIES = 3
+# MAX_SUMMARY_CHARS = 1200
+
+# memory_store = {}          # user_id -> memory
+# memory_locks = {}          # user_id -> lock
+
+# # ---------------------------------
+# # Background Summarization
+# # ---------------------------------
+# def run_summarization():
+#     with lock:
+#         summaries.append(summary)
+#         summaries[:] = summaries[-MAX_SUMMARIES:]
+#         memory["recent_messages"] = []
+
+
+#     history_text = "\n".join(
+#         f"{'User' if isinstance(m, HumanMessage) else 'Assistant'}: {m.content}"
+#         for m in recent
+#     )
+
+#     summaries_text = "\n".join(summaries)
+
+#     prompt = f"""
+# Previous summaries:
+# {summaries_text}
+
+# New conversation:
+# {history_text}
+
+# Create a concise factual summary capturing only important context.
+# """
+
+#     summary = invoke_mistral(prompt)[:MAX_SUMMARY_CHARS]
+
+#     with memory_lock:
+#         summaries.append(summary)
+#         if len(summaries) > MAX_SUMMARIES:
+#             summaries.pop(0)
+
+#         memory_store["summaries"] = summaries
+#         memory_store["recent_messages"] = []
+
+
+# def get_user_memory(user_id: str):
+#     if user_id not in memory_store:
+#         memory_store[user_id] = {
+#             "summaries": [],
+#             "recent_messages": [],
+#         }
+#         memory_locks[user_id] = threading.Lock()
+
+#     return memory_store[user_id], memory_locks[user_id]
+
+
+# # ---------------------------------
+# # Main RAG Logic
+# # ---------------------------------
+# def ask_question(user_question: str) -> str:
+#     memory, lock = get_user_memory(user_id)
+#     with lock:
+#         summaries = memory_store["summaries"][:]
+#         recent = memory_store["recent_messages"][:]
+
+#     summaries_text = "\n".join(summaries)
+#     history_text = "\n".join(
+#         f"{'User' if isinstance(m, HumanMessage) else 'Assistant'}: {m.content}"
+#         for m in recent
+#     )
+
+# #     rewrite_prompt = f"""
+# # Conversation summaries:
+# # {summaries_text}
+
+# # Recent history:
+# # {history_text}
+
+# # Question:
+# # {user_question}
+
+# # Rewrite as a standalone search query.
+# # """
+#     search_query = user_question
+
+#     docs = retriever.invoke(search_query)
+#     context = "\n".join(d.page_content for d in docs) if docs else ""
+
+#     final_prompt = f"""
+# You are Todung, a helpful assistant.
+
+# Rules:
+# - Greet only if user greets
+# - Answer in ONE short sentence
+# - Use context if relevant
+# - Otherwise say: I don't have enough information.
+
+# Conversation summaries:
+# {summaries_text}
+
+# Recent history:
+# {history_text}
+
+# Context:
+# {context}
+
+# User question:
+# {user_question}
+# """
+#     answer = invoke_mistral(final_prompt)
+
+#     with lock:
+#         memory["recent_messages"].append(HumanMessage(content=user_question))
+#         memory["recent_messages"].append(AIMessage(content=answer))
+
+
+#         if len(memory_store["recent_messages"]) >= MAX_RECENT_MESSAGES:
+#             summary_executor.submit(run_summarization, user_id)
+
+
+#     return answer
+
+# # ---------------------------------
+# # FastAPI
+# # ---------------------------------
+# app = FastAPI()
+
+# app.add_middleware(
+#     CORSMiddleware,
+#     allow_origins=[
+#         "http://localhost:3000",
+#         "https://chatbot-launch.vercel.app",
+#     ],
+#     allow_methods=["*"],
+#     allow_headers=["*"],
+# )
+
+# class RequestBody(BaseModel):
+#     user_id: str
+#     question: str
+
+# @app.post("/chat")
+# async def chat(body: RequestBody):
+#     loop = asyncio.get_running_loop()
+#     answer = await loop.run_in_executor(
+#         answer_executor, ask_question, body.user_id, body.question
+#     )
+
+#     return {"reply": answer}
 
 
 
