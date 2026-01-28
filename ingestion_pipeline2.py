@@ -1,22 +1,57 @@
 import os
-import re
+import json
 from dotenv import load_dotenv
 from pinecone import Pinecone, ServerlessSpec
 
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
-from langchain_pinecone import PineconeVectorStore
+import boto3
+from langchain_core.embeddings import Embeddings
 from langchain_core.documents import Document
+from langchain_pinecone import PineconeVectorStore
 
 # ---------------------------------
 # Load environment variables
 # ---------------------------------
 load_dotenv()
 
-GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
 
-INDEX_NAME = "gemini-rag-index3"
-NAMESPACE = "todung"
+INDEX_NAME = "titan-rag-index"
+NAMESPACE = "default"
+EMBEDDING_DIM = 1024
+
+# ---------------------------------
+# Bedrock client
+# ---------------------------------
+bedrock = boto3.client(
+    service_name="bedrock-runtime",
+    region_name="us-east-1"
+)
+
+# ---------------------------------
+# Custom Titan Embeddings Wrapper
+# ---------------------------------
+class TitanEmbeddings(Embeddings):
+    def embed_documents(self, texts):
+        return [self._embed(text) for text in texts]
+
+    def embed_query(self, text):
+        return self._embed(text)
+
+    def _embed(self, text: str):
+        body = {
+            "inputText": text,
+            "dimensions": EMBEDDING_DIM
+        }
+
+        response = bedrock.invoke_model(
+            modelId="amazon.titan-embed-text-v2:0",
+            body=json.dumps(body),
+            contentType="application/json",
+            accept="application/json"
+        )
+
+        result = json.loads(response["body"].read())
+        return result["embedding"]
 
 # ---------------------------------
 # Load text file
@@ -28,41 +63,16 @@ def load_text_file(path: str) -> str:
         return f.read()
 
 # ---------------------------------
-# Parse embedding-ready chunks
+# Chunk text
 # ---------------------------------
-def parse_chunks(text: str):
-    raw_chunks = re.split(r"=== CHUNK \d+ ===", text)
-    documents = []
-
-    for chunk in raw_chunks:
-        chunk = chunk.strip()
-        if not chunk:
-            continue
-
-        title = re.search(r"TITLE:\s*(.*)", chunk)
-        section = re.search(r"SECTION:\s*(.*)", chunk)
-        industry = re.search(r"INDUSTRY:\s*(.*)", chunk)
-
-        content = re.sub(
-            r"TITLE:.*\nSECTION:.*\nINDUSTRY:.*\n",
-            "",
-            chunk,
-            flags=re.DOTALL
-        ).strip()
-
-        documents.append(
-            Document(
-                page_content=content,
-                metadata={
-                    "title": title.group(1).strip() if title else "unknown",
-                    "section": section.group(1).strip() if section else "unknown",
-                    "industry": industry.group(1).strip() if industry else "generic",
-                    "source": "Todung_knowledgebase2.txt"
-                }
-            )
-        )
-
-    return documents
+def split_text(text: str, chunk_size=500, overlap=50):
+    chunks = []
+    start = 0
+    while start < len(text):
+        end = start + chunk_size
+        chunks.append(text[start:end])
+        start += chunk_size - overlap
+    return chunks
 
 # ---------------------------------
 # Main ingestion logic
@@ -71,23 +81,30 @@ def ingest():
     print("🔹 Loading knowledge base...")
     raw_text = load_text_file("Todung_knowledgebase2.txt")
 
-    documents = parse_chunks(raw_text)
-    print(f"🔹 Parsed {len(documents)} semantic chunks")
+    chunks = split_text(raw_text)
+    print(f"🔹 Created {len(chunks)} chunks")
 
-    print("🔹 Initializing Gemini embeddings...")
-    embeddings = GoogleGenerativeAIEmbeddings(
-        model="models/text-embedding-004",
-        google_api_key=GOOGLE_API_KEY,
-        task_type="RETRIEVAL_DOCUMENT"
-    )
+    documents = [
+        Document(
+            page_content=chunk,
+            metadata={"source": "Todung_knowledgebase2.txt"}
+        )
+        for chunk in chunks
+    ]
 
+    print("🔹 Initializing Titan embeddings...")
+    embeddings = TitanEmbeddings()
+
+    # ---------------------------------
+    # Pinecone setup
+    # ---------------------------------
     pc = Pinecone(api_key=PINECONE_API_KEY)
 
     if INDEX_NAME not in pc.list_indexes().names():
         print("🔹 Creating Pinecone index...")
         pc.create_index(
             name=INDEX_NAME,
-            dimension=768,
+            dimension=EMBEDDING_DIM,
             metric="cosine",
             spec=ServerlessSpec(
                 cloud="aws",
@@ -103,7 +120,7 @@ def ingest():
         namespace=NAMESPACE
     )
 
-    print("✅ Todung knowledge base successfully indexed")
+    print("✅ Embeddings successfully stored in Pinecone")
 
 # ---------------------------------
 # Entry point

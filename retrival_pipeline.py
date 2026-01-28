@@ -1,47 +1,57 @@
 import os
 from dotenv import load_dotenv
-from sentence_transformers import SentenceTransformer
 from pinecone import Pinecone
+from langchain_aws import BedrockEmbeddings
 
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
-
+# ---------------------------------
+# Environment
+# ---------------------------------
 load_dotenv()
 
-GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
-INDEX_NAME = "gemini-rag-index2"
+INDEX_NAME = "titan-rag-index"
 NAMESPACE = "default"
 
-# Load model
-model = GoogleGenerativeAIEmbeddings(
-    model="models/text-embedding-004",
-    google_api_key=GOOGLE_API_KEY,
-    task_type="RETRIEVAL_QUERY"
+# ---------------------------------
+# Titan Embeddings (Bedrock)
+# ---------------------------------
+embeddings = BedrockEmbeddings(
+    model_id="amazon.titan-embed-text-v2:0",
+    region_name="us-east-1",
 )
 
-# Pinecone init
+# ---------------------------------
+# Pinecone
+# ---------------------------------
 pc = Pinecone(api_key=PINECONE_API_KEY)
 index = pc.Index(INDEX_NAME)
 
+# ---------------------------------
 # Query
+# ---------------------------------
 query = "How can Todung help in hospitals?"
 
 # Embed query
-# FIX: Use .embed_query() instead of .encode()
-query_vector = model.embed_query(query)
+query_vector = embeddings.embed_query(query)
+
+# Safety check
+assert len(query_vector) == 1024, "Embedding dimension mismatch!"
 
 # Search
 response = index.query(
     vector=query_vector,
     top_k=1,
     include_metadata=True,
-    namespace=NAMESPACE
+    namespace=NAMESPACE,
 )
 
 print(f"User Query: {query}")
 print("--- Context ---")
 
-for i, match in enumerate(response["matches"], 1):
+for i, match in enumerate(response.get("matches", []), 1):
+    metadata = match.get("metadata", {})
+    text = metadata.get("text") or metadata.get("page_content", "[No text found]")
+
     print(f"Document {i}:")
-    print(match["metadata"]["text"])
+    print(text)
     print("-" * 50)

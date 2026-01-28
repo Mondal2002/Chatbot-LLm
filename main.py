@@ -14,19 +14,21 @@ from botocore.exceptions import ClientError
 
 from pinecone import Pinecone
 from langchain_pinecone import PineconeVectorStore
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_core.messages import HumanMessage, AIMessage
+from langchain_aws import BedrockEmbeddings
+
 
 # ---------------------------------
 # Environment
 # ---------------------------------
 load_dotenv()
 
-GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+# GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
 
-INDEX_NAME = "gemini-rag-index4"
+INDEX_NAME = "titan-rag-index"
 NAMESPACE = "default"
+EMBEDDING_DIM = 1024
 
 # ---------------------------------
 # Threading
@@ -38,10 +40,9 @@ bedrock_lock = threading.Lock()
 # ---------------------------------
 # Embeddings
 # ---------------------------------
-embeddings = GoogleGenerativeAIEmbeddings(
-    model="models/text-embedding-004",
-    google_api_key=GOOGLE_API_KEY,
-    task_type="RETRIEVAL_QUERY",
+embeddings = BedrockEmbeddings(
+    model_id="amazon.titan-embed-text-v2:0",
+    region_name="us-east-1",
 )
 
 # ---------------------------------
