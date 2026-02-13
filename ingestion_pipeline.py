@@ -5,6 +5,13 @@ from pinecone import Pinecone, ServerlessSpec
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_pinecone import PineconeVectorStore
 from langchain_core.documents import Document
+import boto3
+
+bedrock = boto3.client(
+    service_name="bedrock-runtime",
+    region_name="us-east-1"  # change if needed
+)
+
 
 # ---------------------------------
 # Load environment variables

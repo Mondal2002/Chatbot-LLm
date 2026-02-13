@@ -5,4 +5,5 @@ __pycache__/
 *.dll
 *.so
 *.bin
+ingestion_pipeline2.py
 
